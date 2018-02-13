@@ -1,12 +1,4 @@
 #
-# Provider. We assume access keys are provided via environment variables.
-#
-
-provider "aws" {
-  region = "${var.aws_region}"
-}
-
-#
 # Network. We create a VPC, gateway, subnets and security groups.
 #
 
@@ -60,12 +52,12 @@ resource "aws_security_group" "elb" {
   }
   
   # HTTPS access from anywhere
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+#  ingress {
+#    from_port   = 443
+#    to_port     = 443
+#    protocol    = "tcp"
+#    cidr_blocks = ["0.0.0.0/0"]
+#  }
 
   # Outbound internet access
   egress {
@@ -118,70 +110,23 @@ resource "aws_security_group" "default" {
 #
 # The key pair which will be installed on the instances later.
 #
-
 resource "aws_key_pair" "auth" {
-  key_name   = "default"
+  key_name   = "${var.lab_name}"
   public_key = "${file(var.public_key_path)}"
 }
 
-#
-# Instances. Using the "instance" module.
-#
-
-module "backend_api" {
-    source                 = "./instance"
-    subnet_id              = "${aws_subnet.private.id}"
-    key_pair_id            = "${aws_key_pair.auth.id}"
-    security_group_id      = "${aws_security_group.default.id}"
-    
-    count                  = 2
-    group_name             = "api"
-}
-
-module "backend_worker" {
-    source                 = "./instance"
-    subnet_id              = "${aws_subnet.private.id}"
-    key_pair_id            = "${aws_key_pair.auth.id}"
-    security_group_id      = "${aws_security_group.default.id}"
-    
-    count                  = 2
-    group_name             = "worker"
-    instance_type          = "t2.medium"
-}
-
-module "frontend" {
-    source                 = "./instance"
-    subnet_id              = "${aws_subnet.private.id}"
-    key_pair_id            = "${aws_key_pair.auth.id}"
-    security_group_id      = "${aws_security_group.default.id}"
-    
-    count                  = 2
-    group_name             = "frontend"
-}
-
-module "db_mysql" {
-    source                 = "./instance"
-    subnet_id              = "${aws_subnet.private.id}"
-    key_pair_id            = "${aws_key_pair.auth.id}"
-    security_group_id      = "${aws_security_group.default.id}"
-    
-    count                  = 3
-    disk_size              = 30
-    group_name             = "mysql"
-    instance_type          = "t2.medium"
-}
 
 #
 # Load Balancers. Uses the instance module outputs.
 #
 
 # Public Backend ELB
-resource "aws_elb" "backend" {
-  name = "elb-public-backend"
+resource "aws_elb" "web" {
+  name = "elb-public-web"
 
   subnets         = ["${aws_subnet.public.id}", "${aws_subnet.private.id}"]
   security_groups = ["${aws_security_group.elb.id}"]
-  instances       = ["${module.backend_api.instance_ids}"]
+  instances       = ["${aws_instance.web.id}"]
 
   listener {
     instance_port     = 80
@@ -194,30 +139,7 @@ resource "aws_elb" "backend" {
     healthy_threshold   = 2
     unhealthy_threshold = 2
     timeout             = 3
-    target              = "HTTP:80/healthcheck.php"
-    interval            = 30
-  }
-}
-
-# Public Frontend ELB
-resource "aws_elb" "frontend" {
-  name = "elb-public-frontend"
-
-  subnets         = ["${aws_subnet.public.id}", "${aws_subnet.private.id}"]
-  security_groups = ["${aws_security_group.elb.id}"]
-  instances       = ["${module.frontend.instance_ids}"]
-
-  listener {
-    instance_port     = 80
-    instance_protocol = "http"
-    lb_port           = 80
-    lb_protocol       = "http"
-  }
-  
-  health_check {
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 3
+    //TODO:  make a health check
     target              = "HTTP:80/healthcheck.php"
     interval            = 30
   }
@@ -229,7 +151,7 @@ resource "aws_elb" "db_mysql" {
 
   subnets         = ["${aws_subnet.private.id}"]
   security_groups = ["${aws_security_group.default.id}"]
-  instances       = ["${module.db_mysql.instance_ids}"]
+  instances       = ["${aws_db_instance.db_mysql.id}"]
   internal        = true
 
   listener {
@@ -247,3 +169,46 @@ resource "aws_elb" "db_mysql" {
     interval            = 30
   }
 }
+
+
+###########################################################################
+########################INSTANCES##########################################
+###########################################################################
+
+data "aws_ami" "ubuntu" {
+    most_recent = true
+
+    filter {
+        name   = "name"
+        values = ["ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-*"]
+    }
+
+    filter {
+        name   = "virtualization-type"
+        values = ["hvm"]
+    }
+
+    owners = ["099720109477"] # Canonical
+}
+
+resource "aws_instance" "web" {
+
+  instance_type = "t2.micro"
+  ami = "${data.aws_ami.ubuntu.id}"
+
+  #subnet_id              = "${aws_subnet.private.id}"
+  #key_pair_id            = "${aws_key_pair.auth.id}"
+  #security_group_id      = "${aws_security_group.default.id}"
+}
+
+
+resource "aws_db_instance" "db_mysql" {
+    allocated_storage	   = 10
+    engine		   = "mysql"
+    instance_class         = "db.t1.micro"
+    name		   = "kinetix"
+    username		   = "kinetix"
+    password		   = "H#59VJYcC9rvD$"
+    port		   = 3306
+}
+
