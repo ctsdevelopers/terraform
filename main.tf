@@ -187,14 +187,22 @@ resource "aws_launch_configuration" "as_conf" {
   name_prefix   = "kinetix-server-"
   instance_type = "t2.micro"
   security_groups = ["${aws_security_group.web-server.id}"]
+  iam_instance_profile = "${aws_iam_instance_profile.chroma_profile.id}"
 user_data = <<EOF
 #!/bin/bash
 sudo apt-get update -y
-#hostname kinetix_UNIQUE_HOSTNAME
 sudo apt install nginx -y
-sudo apt install puppet-agent -y
+sudo apt install awscli -y
+while [ ! -f /home/ubuntu/.ssh/id_rsa ]; do
+  aws s3 cp s3://chroma-bitbucket-key/id_rsa /home/ubuntu/.ssh/id_rsa --region us-east-2
+  sleep 2
+done
 sudo echo -e "[agent]\nip-10-0-11-246.us-east-2.compute.internal" >> /etc/puppetlabs/puppet/puppet.conf
-#sudo /opt/puppetlabs/bin/puppet apply --envrionment production manifests/default.pp
+sudo sed -i "2i10.0.11.246 ip-10-0-11-246.us-east-2.compute.internal" /etc/hosts
+sudo puppet agent --test --server ip-10-0-11-246.us-east-2.compute.internal 
+#cd /var/www/
+#sudo git clone git@bitbucket.org:cmeintegrations/kinetix-lis.git 
+#sudo chown -R ubuntu:www-data /var/www
 EOF
   lifecycle {
     create_before_destroy = true
