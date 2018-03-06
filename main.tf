@@ -213,6 +213,9 @@ sudo git clone git@bitbucket.org:cmeintegrations/kinetix-lis.git
 sudo mkdir /var/www/kinetix-lis
 sudo mv /home/ubuntu/kinetix-lis/* /var/www/kinetix-lis/
 sudo chown -R ubuntu:www-data /var/www
+sudo rm -rf /home/ubuntu/kinetix-lis
+
+sudo aws s3 cp s3://chroma-bitbucket-key/.env /var/www/kinetix-lis/ --region us-east-2
 EOF
   lifecycle {
     create_before_destroy = true

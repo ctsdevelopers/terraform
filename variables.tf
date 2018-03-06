@@ -8,6 +8,11 @@ variable "app_name" {
   default = "kinetix"
 }
 
+variable "db_pass" {
+  description = "The password for the RDS instance"
+  default = "CG7FmwG905oVpJ3sVp@c"
+}
+
 ############
 #kinetic.pub
 ############
