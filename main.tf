@@ -193,16 +193,26 @@ user_data = <<EOF
 sudo apt-get update -y
 sudo apt install nginx -y
 sudo apt install awscli -y
-while [ ! -f /home/ubuntu/.ssh/id_rsa ]; do
-  aws s3 cp s3://chroma-bitbucket-key/id_rsa /home/ubuntu/.ssh/id_rsa --region us-east-2
+sudo mkdir /root/.ssh/
+sudo ssh-keyscan -H bitbucket.org >> /root/.ssh/known_hosts
+
+while [ ! -f /root/.ssh/id_rsa ]; do
+  sudo aws s3 cp s3://chroma-bitbucket-key/id_rsa /root/.ssh/id_rsa --region us-east-2
   sleep 2
 done
+
+sudo chmod 400 /root/.ssh/id_rsa
+
 sudo echo -e "[agent]\nip-10-0-11-246.us-east-2.compute.internal" >> /etc/puppetlabs/puppet/puppet.conf
 sudo sed -i "2i10.0.11.246 ip-10-0-11-246.us-east-2.compute.internal" /etc/hosts
 sudo puppet agent --test --server ip-10-0-11-246.us-east-2.compute.internal 
-#cd /var/www/
-#sudo git clone git@bitbucket.org:cmeintegrations/kinetix-lis.git 
-#sudo chown -R ubuntu:www-data /var/www
+
+cd /home/ubuntu/
+sudo git clone git@bitbucket.org:cmeintegrations/kinetix-lis.git 
+
+sudo mkdir /var/www/kinetix-lis
+sudo mv /home/ubuntu/kinetix-lis/* /var/www/kinetix-lis/
+sudo chown -R ubuntu:www-data /var/www
 EOF
   lifecycle {
     create_before_destroy = true
