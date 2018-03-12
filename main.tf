@@ -30,12 +30,12 @@ resource "aws_security_group" "elb-sg" {
   }
   
   # HTTPS access from anywhere
-#  ingress {
-#    from_port   = 443
-#    to_port     = 80
-#    protocol    = "tcp"
-#    cidr_blocks = ["0.0.0.0/0"]
-#  }
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
   # Outbound internet access
   egress {
@@ -84,20 +84,13 @@ resource "aws_security_group" "my-db-private" {
   description = "Security group for backend servers and private ELBs"
   vpc_id      = "${data.terraform_remote_state.vpc.vpc_id}"
 
-  # SSH access from anywhere
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    security_groups = ["${aws_security_group.ssh-jumpbox-sg.id}"]
-  }
 
-  # access from ssh jump box
+  # access from ssh jump box && webserver
   ingress {
     from_port   = 3306
     to_port     = 3306
     protocol    = "tcp"
-    security_groups = ["${aws_security_group.ssh-jumpbox-sg.id}"]
+    security_groups = ["${aws_security_group.ssh-jumpbox-sg.id}", "${aws_security_group.web-server.id}"]
   }
 
   # Outbound internet access
@@ -125,6 +118,14 @@ resource "aws_elb" "web" {
   connection_draining = true
   connection_draining_timeout = 400
 
+  #listener {
+  #  instance_port     = 80
+  #  instance_protocol = "http"
+  #  lb_port           = 443
+  #  lb_protocol       = "https"
+    #ssl_certificate_id = ""
+  #}
+
   listener {
     instance_port     = 80
     instance_protocol = "http"
@@ -136,6 +137,7 @@ resource "aws_elb" "web" {
     healthy_threshold   = 2
     unhealthy_threshold = 2
     timeout             = 3
+    #target              = "HTTP:80/ping"
     target              = "TCP:80"
     interval            = 30
   }
@@ -171,14 +173,14 @@ resource "aws_db_instance" "db_mysql" {
     allocated_storage    = 10
     engine               = "mysql"
     instance_class       = "db.t2.micro"
-    name                 = "${var.app_name}"
+    name                 = "${var.db_name}"
     username             = "${var.app_name}"
-    password             = "H#59VJYcC9rvD$"
+    password             = "${var.db_pass}"
     port                 = 3306
     vpc_security_group_ids = ["${aws_security_group.my-db-private.id}"] 
     db_subnet_group_name = "${aws_db_subnet_group.mysql.name}"
 #    storage_encrypted    = true
-#    final_snapshot_identifier = "snapshot"
+    final_snapshot_identifier = "snapshot"
 }
 
 resource "aws_launch_configuration" "as_conf" {
@@ -191,7 +193,6 @@ resource "aws_launch_configuration" "as_conf" {
 user_data = <<EOF
 #!/bin/bash
 sudo apt-get update -y
-sudo apt install nginx -y
 sudo apt install awscli -y
 sudo mkdir /root/.ssh/
 sudo ssh-keyscan -H bitbucket.org >> /root/.ssh/known_hosts
@@ -208,14 +209,22 @@ sudo sed -i "2i10.0.11.246 ip-10-0-11-246.us-east-2.compute.internal" /etc/hosts
 sudo puppet agent --test --server ip-10-0-11-246.us-east-2.compute.internal 
 
 cd /home/ubuntu/
-sudo git clone git@bitbucket.org:cmeintegrations/kinetix-lis.git 
+sudo git clone -b development git@bitbucket.org:cmeintegrations/kinetix-lis.git 
 
 sudo mkdir /var/www/kinetix-lis
 sudo mv /home/ubuntu/kinetix-lis/* /var/www/kinetix-lis/
-sudo chown -R ubuntu:www-data /var/www
-sudo rm -rf /home/ubuntu/kinetix-lis
-
 sudo aws s3 cp s3://chroma-bitbucket-key/.env /var/www/kinetix-lis/ --region us-east-2
+sudo chown -R ubuntu:www-data /var/www
+
+sudo rm -rf /home/ubuntu/kinetix-lis
+sudo apt install zip unzip php7.1-zip -y
+cd /var/www/kinetix-lis
+sudo find /var/www/kinetix-lis -type f -exec chmod 664 {} \;    
+sudo find /var/www/kinetix-lis -type d -exec chmod 775 {} \;
+sudo chgrp -R www-data storage bootstrap/cache
+sudo chmod -R ug+rwx storage bootstrap/cache
+sudo composer install
+sudo chown -R ubuntu:www-data vendor/
 EOF
   lifecycle {
     create_before_destroy = true

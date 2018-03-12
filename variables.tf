@@ -8,9 +8,14 @@ variable "app_name" {
   default = "kinetix"
 }
 
+variable "db_name" {
+  description = "The db name of the lab receiving the LIS"
+  default = "kinetix_master"
+}
+
 variable "db_pass" {
   description = "The password for the RDS instance"
-  default = "CG7FmwG905oVpJ3sVp@c"
+  default = "CG7FmwG905oVpJ3sVpc"
 }
 
 ############
