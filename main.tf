@@ -137,8 +137,7 @@ resource "aws_elb" "web" {
     healthy_threshold   = 2
     unhealthy_threshold = 2
     timeout             = 3
-    #target              = "HTTP:80/ping"
-    target              = "TCP:80"
+    target              = "HTTP:80/ping"
     interval            = 30
   }
 }
@@ -204,7 +203,7 @@ done
 
 sudo chmod 400 /root/.ssh/id_rsa
 
-sudo echo -e "[agent]\nip-10-0-11-246.us-east-2.compute.internal" >> /etc/puppetlabs/puppet/puppet.conf
+#sudo echo -e "[agent]\nip-10-0-11-246.us-east-2.compute.internal" >> /etc/puppetlabs/puppet/puppet.conf
 sudo sed -i "2i10.0.11.246 ip-10-0-11-246.us-east-2.compute.internal" /etc/hosts
 sudo puppet agent --test --server ip-10-0-11-246.us-east-2.compute.internal 
 
